@@ -1,0 +1,43 @@
+# ---- General ----
+gemini_model: "gemini-2.5-flash"      # change here if Google renames/retires it
+voice: "en-US-AnaNeural"              # child-friendly voice; keep fixed for brand consistency
+voice_rate: "-5%"                     # slightly slower = easier for kids
+target_age: "3 to 7"
+
+# Niches rotate in this order, one per day (day 1 = first, day 2 = second ...)
+niche_rotation:
+  - poems
+  - stories
+  - counting
+  - colors
+  - abc
+  - animals
+  - shapes
+  - bedtime
+
+# How each niche is written (this text goes into the AI prompt)
+niches:
+  poems:
+    style: "An ORIGINAL 4 to 6 line rhyming poem or nursery-style rhyme with a bouncy rhythm. Do not copy any existing rhyme or song."
+    scenes: 5
+  stories:
+    style: "A tiny original story with a clear beginning, a small problem, and a happy ending. Friendly animal or child characters you invent."
+    scenes: 6
+  counting:
+    style: "Count from 1 up to 5 or 10 with one fun object per number. Ask the child to count along out loud."
+    scenes: 6
+  colors:
+    style: "Teach 3 to 5 colors using everyday objects. Ask the child to point at or shout each color."
+    scenes: 5
+  abc:
+    style: "Teach 4 to 6 letters, each with a simple word and the letter sound. Ask the child to say the sound."
+    scenes: 6
+  animals:
+    style: "3 to 4 simple, TRUE and surprising animal facts for little kids, each with the animal sound."
+    scenes: 5
+  shapes:
+    style: "Teach 3 to 4 shapes by finding them in real objects. Ask the child to spot the shape."
+    scenes: 5
+  bedtime:
+    style: "A calm, soothing mini bedtime story or lullaby-style text with gentle words that ends with going to sleep."
+    scenes: 5

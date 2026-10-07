@@ -1,0 +1,53 @@
+# Starter topics. When a niche runs out, the system asks Gemini for new ones
+# (inspired by what's trending) and keeps going automatically.
+poems:
+  - "A rainy day"
+  - "The sleepy moon"
+  - "My teddy bear"
+  - "Jumping frogs"
+  - "Little busy bee"
+  - "Ice cream summer"
+stories:
+  - "A shy bunny finds a friend"
+  - "The lost little star"
+  - "The puppy who learned to share"
+  - "A tiny turtle's big race"
+  - "The brave little cloud"
+  - "The garden mystery"
+counting:
+  - "Count 1 to 5 with fruits"
+  - "Count 1 to 10 with farm animals"
+  - "Count 1 to 5 with toys"
+  - "Count 1 to 10 with ocean animals"
+  - "Count 1 to 5 with flowers"
+  - "Count 1 to 10 with vehicles"
+colors:
+  - "Red things"
+  - "Blue things"
+  - "Rainbow colors with fruits"
+  - "Yellow and orange things"
+  - "Green things in nature"
+  - "Colors of the sky"
+abc:
+  - "Letters A to E"
+  - "Letters F to J"
+  - "Letters K to O"
+  - "Letters P to T"
+  - "Letters U to Z"
+animals:
+  - "Amazing facts about elephants"
+  - "Funny penguin facts"
+  - "Sleepy sloth facts"
+  - "Ocean dolphin facts"
+  - "Farm animal sounds"
+  - "Butterfly facts"
+shapes:
+  - "Circle, square, triangle"
+  - "Shapes in the kitchen"
+  - "Shapes in the playground"
+  - "Star, heart and diamond"
+bedtime:
+  - "Goodnight, little farm"
+  - "The moon says goodnight"
+  - "Sleepy forest animals"
+  - "Counting sheep to sleep"
