@@ -9,8 +9,9 @@ ROOT = pathlib.Path(__file__).parent
 CFG = yaml.safe_load(open(ROOT / "config.yaml", encoding="utf-8"))
 TOPICS = yaml.safe_load(open(ROOT / "topics.yaml", encoding="utf-8"))
 STATE_F = ROOT / "data" / "state.json"
+CONTENT_POOL_F = ROOT / "data" / "content_pool.json"
 W, H, FPS = 1080, 1920, 30
-
+GEMINI_WORKING_MODEL = None
 
 # ---------- helpers ----------
 def sh(cmd, cwd=None):
@@ -27,32 +28,246 @@ def duration(path):
 
 
 def gemini(prompt):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{CFG['gemini_model']}:generateContent"
-    body = {"contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json", "temperature": 0.9}}
-    for attempt in range(4):
-        try:
-            r = requests.post(url, json=body, timeout=90,
-                              headers={"x-goog-api-key": os.environ["GEMINI_API_KEY"]})
-            r.raise_for_status()
-            return json.loads(r.json()["candidates"][0]["content"]["parts"][0]["text"])
-        except Exception as e:
-            print("Gemini retry:", e)
-            time.sleep(5 * (attempt + 1))
-    raise RuntimeError("Gemini failed")
+    """Call Gemini with retries, model fallback, and per-run model caching."""
+
+    global GEMINI_WORKING_MODEL
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise RuntimeError("GEMINI_API_KEY is not set")
+
+    configured_models = CFG.get(
+        "gemini_models",
+        ["gemini-3.8-flash"]
+    )
+
+    # If a model already worked during this run, use it first.
+    if GEMINI_WORKING_MODEL:
+        models = [
+            GEMINI_WORKING_MODEL,
+            *[
+                model
+                for model in configured_models
+                if model != GEMINI_WORKING_MODEL
+            ],
+        ]
+    else:
+        models = configured_models
+
+    body = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "text": prompt
+                    }
+                ]
+            }
+        ],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "temperature": 0.9,
+        },
+    }
+
+    retryable_statuses = {408, 429, 500, 502, 503, 504}
+    max_attempts = 2
+
+    for model in models:
+        url = (
+            "https://generativelanguage.googleapis.com/v1beta/"
+            f"models/{model}:generateContent"
+        )
+
+        for attempt in range(1, max_attempts + 1):
+            try:
+                print(
+                    f"Gemini request: model={model}, "
+                    f"attempt={attempt}/{max_attempts}"
+                )
+
+                response = requests.post(
+                    url,
+                    json=body,
+                    timeout=90,
+                    headers={
+                        "x-goog-api-key": api_key,
+                        "Content-Type": "application/json",
+                    },
+                )
+
+                if response.status_code in retryable_statuses:
+                    print(
+                        f"Gemini temporary error: "
+                        f"HTTP {response.status_code}, model={model}"
+                    )
+
+                    if attempt < max_attempts:
+                        delay = 5 * (2 ** (attempt - 1))
+                        jitter = random.uniform(0, 2)
+
+                        print(
+                            f"Retrying {model} in "
+                            f"{delay + jitter:.1f}s..."
+                        )
+
+                        time.sleep(delay + jitter)
+
+                    continue
+
+                response.raise_for_status()
+
+                data = response.json()
+
+                candidates = data.get("candidates", [])
+                if not candidates:
+                    raise RuntimeError(
+                        f"Gemini returned no candidates: {data}"
+                    )
+
+                parts = candidates[0].get("content", {}).get("parts", [])
+                if not parts:
+                    raise RuntimeError(
+                        f"Gemini returned no content parts: {data}"
+                    )
+
+                text = parts[0].get("text")
+                if not text:
+                    raise RuntimeError(
+                        f"Gemini returned empty text: {data}"
+                    )
+
+                result = json.loads(text)
+
+                # Remember the model that successfully generated content.
+                GEMINI_WORKING_MODEL = model
+
+                print(
+                    f"Gemini success: model={model} "
+                    f"(cached for this run)"
+                )
+
+                return result
+
+            except requests.RequestException as e:
+                print(
+                    f"Gemini network error: model={model}, "
+                    f"attempt={attempt}: {e}"
+                )
+
+                if attempt < max_attempts:
+                    delay = 5 * (2 ** (attempt - 1))
+                    jitter = random.uniform(0, 2)
+
+                    print(
+                        f"Retrying {model} in "
+                        f"{delay + jitter:.1f}s..."
+                    )
+
+                    time.sleep(delay + jitter)
+
+            except json.JSONDecodeError as e:
+                raise RuntimeError(
+                    f"Gemini returned invalid JSON from {model}: {e}"
+                ) from e
+
+            except Exception as e:
+                raise RuntimeError(
+                    f"Gemini request failed for {model}: {e}"
+                ) from e
+
+        print(f"Gemini model exhausted: {model}")
+
+    raise RuntimeError(
+        "All configured Gemini models failed. "
+        f"Tried: {', '.join(models)}"
+    )
 
 
 # ---------- state ----------
 def load_state():
     if STATE_F.exists():
-        return json.load(open(STATE_F))
-    return {"day": 0, "used": [], "extra": {}}
+        state = json.load(open(STATE_F, encoding="utf-8"))
+    else:
+        state = {
+            "day": 0,
+            "used": [],
+            "extra": {},
+            "used_content": []
+        }
+
+    # Keep compatibility with older state.json files.
+    state.setdefault("day", 0)
+    state.setdefault("used", [])
+    state.setdefault("extra", {})
+    state.setdefault("used_content", [])
+
+    return state
 
 
 def save_state(s):
     STATE_F.parent.mkdir(exist_ok=True)
     json.dump(s, open(STATE_F, "w"), indent=2)
 
+
+def load_content_pool():
+    """Load the static emergency content pool."""
+    if not CONTENT_POOL_F.exists():
+        print("Content pool not found:", CONTENT_POOL_F)
+        return {}
+
+    try:
+        with open(CONTENT_POOL_F, encoding="utf-8") as f:
+            pool = json.load(f)
+
+        if not isinstance(pool, dict):
+            raise ValueError("Content pool must contain a JSON object.")
+
+        return pool
+
+    except (OSError, json.JSONDecodeError, ValueError) as e:
+        print("Content pool could not be loaded:", e)
+        return {}
+
+
+def get_unused_pool_content(niche, state):
+    """Return one unused content item for the requested niche."""
+    pool = load_content_pool()
+    items = pool.get(niche, [])
+
+    if not isinstance(items, list):
+        print(f"Invalid content pool for niche: {niche}")
+        return None
+
+    used_ids = set(state.get("used_content", []))
+
+    available = [
+        item
+        for item in items
+        if isinstance(item, dict)
+        and item.get("id")
+        and item["id"] not in used_ids
+    ]
+
+    if not available:
+        return None
+
+    return random.choice(available)
+
+
+def mark_pool_content_used(state, content):
+    """Mark a fallback content item as consumed."""
+    content_id = content.get("id")
+
+    if not content_id:
+        return
+
+    state.setdefault("used_content", [])
+
+    if content_id not in state["used_content"]:
+        state["used_content"].append(content_id)
+
+    print(f"Using fallback content: {content_id}")
 
 # ---------- stage 1: trends + topic ----------
 def trend_hints():
@@ -74,23 +289,65 @@ def trend_hints():
 def pick_topic(state, hints):
     niches = CFG["niche_rotation"]
     niche = niches[state["day"] % len(niches)]
+
     pool = TOPICS.get(niche, []) + state["extra"].get(niche, [])
     unused = [t for t in pool if t not in state["used"]]
-    if not unused:  # list exhausted -> ask Gemini for fresh topics
+
+    if unused:
+        return niche, unused[0], None
+
+    # Normal topic list is exhausted.
+    # Try Gemini first.
+    try:
         new = gemini(
-            f"Suggest 10 fresh, original video topics for a kids YouTube Shorts channel, niche: {niche}, "
-            f"ages {CFG['target_age']}. Already used: {state['used'][-40:]}. "
+            f"Suggest 10 fresh, original video topics for a kids YouTube Shorts channel, "
+            f"niche: {niche}, ages {CFG['target_age']}. "
+            f"Already used: {state['used'][-40:]}. "
             f"Trending kids themes this week (inspiration only): {hints}. "
-            "Return a JSON array of 10 short strings.")
-        new = [t for t in new if isinstance(t, str) and t not in state["used"]]
-        state["extra"].setdefault(niche, []).extend(new)
-        unused = new
-    return niche, unused[0]
+            "Return a JSON array of 10 short strings."
+        )
+
+        new = [
+            t for t in new
+            if isinstance(t, str) and t not in state["used"]
+        ]
+
+        if new:
+            state["extra"].setdefault(niche, []).extend(new)
+            return niche, new[0], None
+
+    except RuntimeError as e:
+        print("Gemini topic generation failed:", e)
+
+    # Gemini failed.
+    # Use the emergency content pool.
+    fallback = get_unused_pool_content(niche, state)
+
+    if fallback:
+        print(
+            f"Using content pool topic because Gemini topic generation failed: "
+            f"{fallback.get('topic')}"
+        )
+        return niche, fallback["topic"], fallback
+
+    raise RuntimeError(
+        f"No unused topics and no unused content-pool content for niche '{niche}'."
+    )
 
 
 # ---------- stage 2: script ----------
-def make_script(niche, topic, hints):
+def make_script(niche, topic, hints, state, fallback=None):
+    # If pick_topic() already selected a fallback item,
+    # use it directly instead of calling Gemini.
+    if fallback is not None:
+        print(
+            f"Using ready-made content from pool: "
+            f"{fallback.get('id', 'unknown')}"
+        )
+        return fallback, fallback
+
     n = CFG["niches"][niche]
+
     prompt = f"""You write ORIGINAL scripts for a YouTube Shorts channel for kids aged {CFG['target_age']}.
 Niche: {niche}. Format: {n['style']}
 Topic: {topic}
@@ -105,7 +362,26 @@ Rules:
 
 Return JSON: {{"title": "max 60 chars, keyword first", "description": "1 to 2 sentences",
 "hashtags": ["4 tags without #"], "scenes": [{{"narration": "...", "image_query": "..."}}]}}"""
-    return gemini(prompt)
+
+    try:
+        return gemini(prompt), None
+
+    except RuntimeError as e:
+        print("Gemini script generation failed:", e)
+
+        fallback = get_unused_pool_content(niche, state)
+
+        if fallback:
+            print(
+                f"Falling back to content pool: "
+                f"{fallback.get('id', 'unknown')}"
+            )
+            return fallback, fallback
+
+        raise RuntimeError(
+            f"Gemini failed and no unused content-pool content is available "
+            f"for niche '{niche}'."
+        )
 
 
 # ---------- stage 3: voice with word timings ----------
@@ -206,11 +482,33 @@ def main():
 
     state = load_state()
     hints = trend_hints()
-    niche, topic = pick_topic(state, hints)
-    print(f"Day {state['day'] + 1}: niche={niche} topic={topic}")
 
-    script = make_script(niche, topic, hints)
-    json.dump(script, open(out / "script.json", "w"), indent=2)
+    niche, topic, fallback = pick_topic(state, hints)
+
+    print(
+        f"Day {state['day'] + 1}: "
+        f"niche={niche} topic={topic}"
+    )
+
+    script, used_pool_content = make_script(
+        niche,
+        topic,
+        hints,
+        state,
+        fallback
+    )
+
+    # If a fallback item was used, make sure the metadata topic
+    # matches the actual content from the pool.
+    if used_pool_content:
+        topic = used_pool_content["topic"]
+        mark_pool_content_used(state, used_pool_content)
+
+    json.dump(
+        script,
+        open(out / "script.json", "w", encoding="utf-8"),
+        indent=2
+    )
 
     all_words, clips, wavs, offset = [], [], [], 0.0
     for i, scene in enumerate(script["scenes"]):

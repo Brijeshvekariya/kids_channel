@@ -1,5 +1,8 @@
 # ---- General ----
-gemini_model: "gemini-2.5-flash"      # change here if Google renames/retires it
+gemini_models:
+  - "gemini-3.8-flash"
+  - "gemini-3.7-flash"
+  - "gemini-3.5-flash-lite"      # change here if Google renames/retires it
 voice: "en-US-AnaNeural"              # child-friendly voice; keep fixed for brand consistency
 voice_rate: "-5%"                     # slightly slower = easier for kids
 target_age: "3 to 7"
