@@ -1,0 +1,69 @@
+{
+  "poems": [
+    {
+      "id": "poem_rain_001",
+      "topic": "A rainy day",
+      "title": "Rainy Day Fun!",
+      "description": "A cheerful little poem about rain, boots, and puddles.",
+      "hashtags": ["kids", "poems", "rain", "fun"],
+      "scenes": [
+        {
+          "narration": "Can you hear the raindrops tapping at the window today?",
+          "image_query": "raindrops on window"
+        },
+        {
+          "narration": "Put on your yellow boots and splash along the way!",
+          "image_query": "yellow rain boots"
+        },
+        {
+          "narration": "Jump in a puddle, splash up high, then watch the clouds roll by!",
+          "image_query": "child puddle splash"
+        },
+        {
+          "narration": "Open your bright umbrella and walk with a happy smile.",
+          "image_query": "colorful umbrella rain"
+        },
+        {
+          "narration": "When sunshine peeks through the sky, we can splash again! Did you hear the rain tapping today?",
+          "image_query": "sunshine after rain"
+        }
+      ]
+    },
+    {
+      "id": "poem_sun_001",
+      "topic": "The sunny morning",
+      "title": "Hello, Sunny Day!",
+      "description": "A bright and cheerful poem about starting a sunny morning.",
+      "hashtags": ["kids", "poems", "sun", "morning"],
+      "scenes": [
+        {
+          "narration": "Can you see the golden sun shining in the sky?",
+          "image_query": "sunny morning sky"
+        },
+        {
+          "narration": "Birds wake up and sing hello as fluffy clouds go floating by.",
+          "image_query": "birds sunny sky"
+        },
+        {
+          "narration": "Stretch your arms and wiggle your toes, then smell the flowers as the garden grows.",
+          "image_query": "child garden flowers"
+        },
+        {
+          "narration": "The morning feels warm, bright, and new, with lots of fun for me and you!",
+          "image_query": "happy children outdoors"
+        },
+        {
+          "narration": "Wave hello to the sunny sky and start your day with a smile. Can you see that golden sun shining high?",
+          "image_query": "happy sunny morning"
+        }
+      ]
+    }
+  ],
+  "stories": [],
+  "counting": [],
+  "colors": [],
+  "abc": [],
+  "animals": [],
+  "shapes": [],
+  "bedtime": []
+}
